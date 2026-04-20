@@ -13,7 +13,7 @@ Methods mirror the `NativeApi` interface defined in `@t3tools/contracts`:
 - `providers.respondToRequest`, `providers.stopSession`
 - `shell.openInEditor`, `server.getConfig`
 
-Codex is the only implemented provider. `claudeCode` is reserved in contracts/UI.
+Implemented providers: Codex, Claude Agent, Cursor, OpenCode, and GitHub Copilot.
 
 ## Client transport
 

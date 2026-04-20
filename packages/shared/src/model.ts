@@ -4,6 +4,7 @@ import {
   type ClaudeAgentEffort,
   type ClaudeModelOptions,
   type CodexModelOptions,
+  type CopilotModelOptions,
   type CursorModelOptions,
   type ModelCapabilities,
   type ModelSelection,
@@ -167,6 +168,8 @@ export function normalizeProviderModelOptionsWithCapabilities(
         caps,
         modelOptions as OpenCodeModelOptions,
       );
+    case "copilot":
+      return undefined;
   }
 }
 
@@ -278,6 +281,12 @@ export function createModelSelection(
         provider,
         model,
         ...(options ? { options: options as OpenCodeModelOptions } : {}),
+      };
+    case "copilot":
+      return {
+        provider,
+        model,
+        ...(options ? { options: options as CopilotModelOptions } : {}),
       };
   }
 }

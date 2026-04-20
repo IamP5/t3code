@@ -150,6 +150,16 @@ const PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
     serverPasswordDescription:
       "If your OpenCode server requires authentication, enter the password here. NOTE: Stored in plain text on disk",
   },
+  {
+    provider: "copilot",
+    title: "GitHub Copilot",
+    badgeLabel: "Early Access",
+    binaryPlaceholder: "Copilot binary path",
+    binaryDescription: "Path to the GitHub Copilot CLI binary. Run `copilot auth login` first.",
+    serverUrlPlaceholder: "https://api.githubcopilot.com",
+    serverUrlDescription:
+      "Optional. Leave blank for github.com Copilot; set to your Copilot Enterprise API URL for self-hosted.",
+  },
 ] as const;
 
 const PROVIDER_STATUS_STYLES = {
@@ -553,6 +563,13 @@ export function GeneralSettingsPanel() {
         DEFAULT_UNIFIED_SETTINGS.providers.opencode.serverPassword ||
       settings.providers.opencode.customModels.length > 0,
     ),
+    copilot: Boolean(
+      settings.providers.copilot.binaryPath !==
+        DEFAULT_UNIFIED_SETTINGS.providers.copilot.binaryPath ||
+      settings.providers.copilot.serverUrl !==
+        DEFAULT_UNIFIED_SETTINGS.providers.copilot.serverUrl ||
+      settings.providers.copilot.customModels.length > 0,
+    ),
   });
   const [customModelInputByProvider, setCustomModelInputByProvider] = useState<
     Record<ProviderKind, string>
@@ -561,6 +578,7 @@ export function GeneralSettingsPanel() {
     claudeAgent: "",
     cursor: "",
     opencode: "",
+    copilot: "",
   });
   const [customModelErrorByProvider, setCustomModelErrorByProvider] = useState<
     Partial<Record<ProviderKind, string | null>>
@@ -1320,7 +1338,8 @@ export function GeneralSettingsPanel() {
                                   ...settings.providers,
                                   [providerCard.provider]: {
                                     ...settings.providers[providerCard.provider],
-                                    ...(providerCard.provider === "opencode"
+                                    ...(providerCard.provider === "opencode" ||
+                                    providerCard.provider === "copilot"
                                       ? { serverUrl: event.target.value }
                                       : {}),
                                   },
