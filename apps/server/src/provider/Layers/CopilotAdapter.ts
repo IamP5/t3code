@@ -166,6 +166,69 @@ function toCopilotPermissionResult(decision: ProviderApprovalDecision): Permissi
 }
 
 /**
+ * Build a stable session-scoped signature for a permission request so that
+ * `acceptForSession` decisions can auto-approve future requests of the same
+ * shape without re-prompting the user.
+ *
+ * The signature is intentionally tighter than "permission kind alone":
+ * approving one `shell` command shouldn't silently approve every future shell
+ * command. Instead we scope by the command verb (first token), specific file
+ * path for reads/writes, tool name for mcp/custom-tool, and URL host for url
+ * requests.
+ */
+function buildPermissionSignature(request: PermissionRequest): string {
+  switch (request.kind) {
+    case "shell": {
+      const full = (request as { fullCommandText?: unknown }).fullCommandText;
+      if (typeof full === "string" && full.trim().length > 0) {
+        const verb = full.trim().split(/\s+/)[0] ?? "";
+        return `shell:${verb}`;
+      }
+      return "shell:*";
+    }
+    case "write":
+    case "read": {
+      const path = (request as { path?: unknown }).path;
+      const fileName = (request as { fileName?: unknown }).fileName;
+      const target =
+        typeof path === "string" && path.trim().length > 0
+          ? path.trim()
+          : typeof fileName === "string" && fileName.trim().length > 0
+            ? fileName.trim()
+            : "*";
+      return `${request.kind}:${target}`;
+    }
+    case "mcp": {
+      const name =
+        (request as { toolName?: unknown }).toolName ??
+        (request as { toolTitle?: unknown }).toolTitle;
+      return typeof name === "string" && name.trim().length > 0
+        ? `mcp:${name.trim()}`
+        : "mcp:*";
+    }
+    case "custom-tool": {
+      const name = (request as { toolName?: unknown }).toolName;
+      return typeof name === "string" && name.trim().length > 0
+        ? `custom-tool:${name.trim()}`
+        : "custom-tool:*";
+    }
+    case "url": {
+      const url = (request as { url?: unknown }).url;
+      if (typeof url === "string" && url.trim().length > 0) {
+        try {
+          return `url:${new URL(url.trim()).host}`;
+        } catch {
+          return `url:${url.trim()}`;
+        }
+      }
+      return "url:*";
+    }
+    default:
+      return `${String(request.kind)}:*`;
+  }
+}
+
+/**
  * Deterministic Copilot session id derived from our thread id. Having a
  * stable id keeps resume-session semantics simple: the adapter hands the
  * same id back to `client.resumeSession` without needing a cursor cache.
@@ -213,6 +276,12 @@ interface CopilotSessionContext {
   /** Tracks emitted `item.started` markers for assistant messages (keyed by messageId). */
   readonly startedAssistantMessages: Set<string>;
   readonly turns: Array<{ id: TurnId; items: Array<unknown> }>;
+  /**
+   * Session-scoped approval cache. Populated when the user chooses
+   * `acceptForSession` for a permission request; future requests with the
+   * same signature auto-approve without re-prompting.
+   */
+  readonly sessionApprovedSignatures: Set<string>;
   activeTurnId: TurnId | undefined;
   stopped: boolean;
 }
@@ -597,6 +666,50 @@ function makeCopilotAdapter(options?: CopilotAdapterLiveOptions) {
         const runtimeApprovalId = ApprovalRequestId.make(crypto.randomUUID());
         const runtimeRequestId = RuntimeRequestId.make(runtimeApprovalId);
         const detail = formatPermissionDetail(request);
+        const signature = buildPermissionSignature(request);
+
+        // Auto-approval paths: emit the canonical request.opened / .resolved
+        // pair anyway so the UI sees the approval happen (and activity shows
+        // up in the thread log), but don't open a pending approval deferred.
+        const autoApprove = async (reason: "full-access" | "sticky-session-approval") => {
+          const openAuto: Effect.Effect<void> = Effect.gen(function* () {
+            yield* offerRuntimeEvent({
+              type: "request.opened",
+              ...(yield* makeEventStamp()),
+              provider: PROVIDER,
+              threadId: ctx.threadId,
+              turnId: ctx.activeTurnId,
+              requestId: runtimeRequestId,
+              payload: {
+                requestType,
+                ...(detail ? { detail } : {}),
+                args: request,
+              },
+            });
+            yield* offerRuntimeEvent({
+              type: "request.resolved",
+              ...(yield* makeEventStamp()),
+              provider: PROVIDER,
+              threadId: ctx.threadId,
+              turnId: ctx.activeTurnId,
+              requestId: runtimeRequestId,
+              payload: {
+                requestType,
+                decision: "accept",
+                resolution: { auto: reason, signature },
+              },
+            });
+          });
+          await Effect.runPromise(openAuto).catch(() => undefined);
+          return { kind: "approved" } as PermissionRequestResult;
+        };
+
+        if (ctx.session.runtimeMode === "full-access") {
+          return await autoApprove("full-access");
+        }
+        if (ctx.sessionApprovedSignatures.has(signature)) {
+          return await autoApprove("sticky-session-approval");
+        }
 
         const decisionDeferred = await Effect.runPromise(Deferred.make<ProviderApprovalDecision>());
 
@@ -627,6 +740,10 @@ function makeCopilotAdapter(options?: CopilotAdapterLiveOptions) {
 
         const decision = await Effect.runPromise(Deferred.await(decisionDeferred));
         ctx.pendingApprovals.delete(runtimeApprovalId);
+
+        if (decision === "acceptForSession") {
+          ctx.sessionApprovedSignatures.add(signature);
+        }
 
         const resolveEvent: Effect.Effect<void> = Effect.gen(function* () {
           yield* offerRuntimeEvent({
@@ -777,6 +894,7 @@ function makeCopilotAdapter(options?: CopilotAdapterLiveOptions) {
             emittedAssistantText: new Map(),
             startedAssistantMessages: new Set(),
             turns: [],
+            sessionApprovedSignatures: new Set(),
             activeTurnId: undefined,
             stopped: false,
           };
