@@ -163,6 +163,7 @@ const composerProviderRegistry: Record<ProviderKind, ProviderRegistryEntry> = {
   opencode: createProviderRegistryEntry("opencode", {
     showInteractionModeToggle: false,
   }),
+  copilot: createProviderRegistryEntry("copilot"),
 };
 
 export function getComposerProviderState(input: ComposerProviderStateInput): ComposerProviderState {

@@ -115,6 +115,8 @@ layer("ProviderAdapterRegistryLive", (it) => {
 
       const providers = yield* registry.listProviders();
       assert.deepEqual(providers, ["codex", "claudeAgent", "opencode", "cursor"]);
+      // copilot is registered only when its live layer is provided; this test
+      // uses explicit fakes so the copilot adapter is absent by design.
     }),
   );
 

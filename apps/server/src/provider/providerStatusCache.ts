@@ -7,6 +7,7 @@ export const PROVIDER_CACHE_IDS = [
   "claudeAgent",
   "opencode",
   "cursor",
+  "copilot",
 ] as const satisfies ReadonlyArray<ServerProvider["provider"]>;
 
 const decodeProviderStatusCache = Schema.decodeUnknownEffect(

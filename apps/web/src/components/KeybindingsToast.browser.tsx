@@ -107,6 +107,7 @@ function createBaseServerConfig(): ServerConfig {
           serverPassword: "",
           customModels: [],
         },
+        copilot: { enabled: true, binaryPath: "", serverUrl: "", customModels: [] },
       },
     },
   };

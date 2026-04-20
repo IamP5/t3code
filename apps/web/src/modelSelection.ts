@@ -66,6 +66,13 @@ const PROVIDER_CUSTOM_MODEL_CONFIG: Record<ProviderKind, ProviderCustomModelConf
     placeholder: "openai/gpt-5",
     example: "anthropic/claude-sonnet-4-5-20250929",
   },
+  copilot: {
+    provider: "copilot",
+    title: "GitHub Copilot",
+    description: "Save additional GitHub Copilot model slugs for the picker and `/model` command.",
+    placeholder: "your-copilot-model-slug",
+    example: "gpt-5.2-codex",
+  },
 };
 
 export const MODEL_PROVIDER_SETTINGS = Object.values(PROVIDER_CUSTOM_MODEL_CONFIG);
@@ -199,6 +206,12 @@ export function getCustomModelOptionsByProvider(
       providers,
       "opencode",
       selectedProvider === "opencode" ? selectedModel : undefined,
+    ),
+    copilot: getAppModelOptions(
+      settings,
+      providers,
+      "copilot",
+      selectedProvider === "copilot" ? selectedModel : undefined,
     ),
   };
 }
